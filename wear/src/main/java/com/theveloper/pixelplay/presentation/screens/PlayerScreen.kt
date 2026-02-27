@@ -55,11 +55,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -102,8 +105,10 @@ import com.theveloper.pixelplay.shared.WearPlayerState
 import androidx.core.graphics.ColorUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -1098,31 +1103,45 @@ private fun CenterPlayButton(
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val strokeWidth = 4.dp.toPx()
-            val diameter = size.minDimension - strokeWidth
-            val arcTopLeft = Offset(
-                x = (size.width - diameter) / 2f,
-                y = (size.height - diameter) / 2f,
+            val ringInset = (strokeWidth / 2f) + 1.5.dp.toPx()
+            val ringRadius = ((size.minDimension - (ringInset * 2f)) / 2f).coerceAtLeast(0f)
+            val ringPath = buildPlayButtonRingPath(
+                centerX = size.width / 2f,
+                centerY = size.height / 2f,
+                radius = ringRadius,
+                curve = animatedCurve,
+                rotation = animatedRotation,
             )
-            val arcSize = Size(diameter, diameter)
+            val ringStroke = Stroke(
+                width = strokeWidth,
+                cap = StrokeCap.Round,
+                join = StrokeJoin.Round,
+            )
 
-            drawArc(
+            drawPath(
+                path = ringPath,
                 color = palette.chipContainer.copy(alpha = 0.62f),
-                startAngle = -90f,
-                sweepAngle = 360f,
-                useCenter = false,
-                topLeft = arcTopLeft,
-                size = arcSize,
-                style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
+                style = ringStroke,
             )
-            drawArc(
-                color = palette.controlContainer.copy(alpha = if (enabled) 1f else 0.95f),
-                startAngle = -90f,
-                sweepAngle = 360f * ringProgress,
-                useCenter = false,
-                topLeft = arcTopLeft,
-                size = arcSize,
-                style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
-            )
+
+            val pathMeasure = PathMeasure().apply {
+                setPath(ringPath, forceClosed = true)
+            }
+            val progressLength = pathMeasure.length * ringProgress
+            if (progressLength > 0f) {
+                val progressPath = Path()
+                pathMeasure.getSegment(
+                    startDistance = 0f,
+                    stopDistance = progressLength,
+                    destination = progressPath,
+                    startWithMoveTo = true,
+                )
+                drawPath(
+                    path = progressPath,
+                    color = palette.controlContainer.copy(alpha = if (enabled) 1f else 0.95f),
+                    style = ringStroke,
+                )
+            }
         }
 
         Box(
@@ -1147,6 +1166,44 @@ private fun CenterPlayButton(
             )
         }
     }
+}
+
+private fun buildPlayButtonRingPath(
+    centerX: Float,
+    centerY: Float,
+    radius: Float,
+    curve: Float,
+    rotation: Float,
+    sides: Int = 8,
+    steps: Int = 320,
+): Path {
+    val twoPi = Math.PI * 2.0
+    val startAngle = -Math.PI / 2.0
+    val angleStep = twoPi / steps.toDouble()
+    val rotationRad = Math.toRadians(rotation.toDouble())
+    val ringPath = Path()
+    val boundedCurve = curve.coerceIn(0f, 0.12f)
+    val boundedRadius = radius.coerceAtLeast(0f)
+
+    fun pointAt(t: Double): Offset {
+        val angle = startAngle + t
+        val wave = 1f + (boundedCurve * cos((sides * angle)).toFloat())
+        val distance = boundedRadius * wave
+        val x = centerX + (distance * cos(angle - rotationRad).toFloat())
+        val y = centerY + (distance * sin(angle - rotationRad).toFloat())
+        return Offset(x, y)
+    }
+
+    val firstPoint = pointAt(0.0)
+    ringPath.moveTo(firstPoint.x, firstPoint.y)
+    var t = angleStep
+    while (t <= twoPi) {
+        val point = pointAt(t)
+        ringPath.lineTo(point.x, point.y)
+        t += angleStep
+    }
+    ringPath.close()
+    return ringPath
 }
 
 @Composable
