@@ -6,10 +6,12 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaSession
 import com.theveloper.pixelplay.data.local.LocalSongDao
 import com.theveloper.pixelplay.data.local.LocalSongEntity
 import com.theveloper.pixelplay.shared.WearLibraryItem
@@ -58,8 +60,8 @@ data class WearQueueSong(
  * Repository managing ExoPlayer for standalone local playback on the watch.
  * Plays audio files that have been transferred from the phone and stored locally.
  *
- * This is a simple ExoPlayer wrapper (no MediaSession/MusicService for MVP).
- * MediaSession can be added later if media notification support is needed.
+ * Uses a lightweight local ExoPlayer plus MediaSession so Bluetooth headset media buttons
+ * and other system transport controls route to watch playback correctly.
  */
 @Singleton
 class WearLocalPlayerRepository @Inject constructor(
@@ -69,6 +71,7 @@ class WearLocalPlayerRepository @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val json = Json { ignoreUnknownKeys = true }
     private var exoPlayer: ExoPlayer? = null
+    private var mediaSession: MediaSession? = null
 
     private val _localPlayerState = MutableStateFlow(WearLocalPlayerState())
     val localPlayerState: StateFlow<WearLocalPlayerState> = _localPlayerState.asStateFlow()
@@ -98,11 +101,21 @@ class WearLocalPlayerRepository @Inject constructor(
     companion object {
         private const val TAG = "WearLocalPlayer"
         private const val POSITION_UPDATE_INTERVAL_MS = 1000L
+        private const val MEDIA_SESSION_ID = "wear-local-playback"
     }
 
     private fun getOrCreatePlayer(): ExoPlayer {
         return exoPlayer ?: ExoPlayer.Builder(application).build().also { player ->
             exoPlayer = player
+            player.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+                    .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .build(),
+                true,
+            )
+            player.setHandleAudioBecomingNoisy(true)
+            ensureMediaSession(player)
             player.addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     updateState()
@@ -122,6 +135,14 @@ class WearLocalPlayerRepository @Inject constructor(
             })
             Timber.tag(TAG).d("ExoPlayer created")
         }
+    }
+
+    private fun ensureMediaSession(player: ExoPlayer) {
+        if (mediaSession != null) return
+
+        mediaSession = MediaSession.Builder(application, player)
+            .setId(MEDIA_SESSION_ID)
+            .build()
     }
 
     /**
@@ -294,6 +315,8 @@ class WearLocalPlayerRepository @Inject constructor(
      */
     fun release() {
         stopPositionUpdates()
+        mediaSession?.release()
+        mediaSession = null
         exoPlayer?.release()
         exoPlayer = null
         _isLocalPlaybackActive.value = false

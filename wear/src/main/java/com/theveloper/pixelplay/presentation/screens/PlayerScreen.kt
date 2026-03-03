@@ -1330,7 +1330,7 @@ private fun CenterPlayButton(
 
             drawPath(
                 path = ringPath,
-                color = palette.chipContainer.copy(alpha = 0.62f),
+                color = palette.surfaceContainerLowest, //.copy(alpha = 0.62f),
                 style = ringStroke,
             )
 
