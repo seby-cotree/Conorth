@@ -1117,9 +1117,13 @@ class WearCommandReceiver : WearableListenerService() {
                 it.type == AudioDeviceInfo.TYPE_BLE_BROADCAST
         }
         if (bluetoothDevice != null || audioManager.isBluetoothA2dpOn || audioManager.isBluetoothScoOn) {
+            val bluetoothName = bluetoothDevice?.productName?.toString().orEmpty().ifBlank { "Bluetooth" }
             return ActiveOutputRoute(
-                type = WearVolumeState.ROUTE_TYPE_BLUETOOTH,
-                name = bluetoothDevice?.productName?.toString().orEmpty().ifBlank { "Bluetooth" },
+                type = resolveBluetoothRouteType(
+                    audioDevice = bluetoothDevice,
+                    deviceName = bluetoothName,
+                ),
+                name = bluetoothName,
             )
         }
 
@@ -1152,6 +1156,81 @@ class WearCommandReceiver : WearableListenerService() {
             type = WearVolumeState.ROUTE_TYPE_PHONE,
             name = "Phone",
         )
+    }
+
+    private fun resolveBluetoothRouteType(
+        audioDevice: AudioDeviceInfo?,
+        deviceName: String,
+    ): String {
+        return when (audioDevice?.type) {
+            AudioDeviceInfo.TYPE_BLE_HEADSET,
+            AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+            -> WearVolumeState.ROUTE_TYPE_HEADPHONES
+
+            AudioDeviceInfo.TYPE_BLE_SPEAKER,
+            AudioDeviceInfo.TYPE_BLE_BROADCAST,
+            -> WearVolumeState.ROUTE_TYPE_BLUETOOTH
+
+            else -> {
+                if (looksLikeBluetoothHeadphones(deviceName)) {
+                    WearVolumeState.ROUTE_TYPE_HEADPHONES
+                } else {
+                    WearVolumeState.ROUTE_TYPE_BLUETOOTH
+                }
+            }
+        }
+    }
+
+    private fun looksLikeBluetoothHeadphones(deviceName: String): Boolean {
+        val normalizedName = deviceName.trim().lowercase()
+        if (normalizedName.isBlank()) return false
+
+        val headphoneHints = listOf(
+            "airpods",
+            "buds",
+            "buds+",
+            "bud",
+            "earbud",
+            "earbuds",
+            "earphones",
+            "earphone",
+            "headphone",
+            "headphones",
+            "headset",
+            "pods",
+            "xm3",
+            "xm4",
+            "xm5",
+            "wh-",
+            "wf-",
+            "qc ultra",
+            "quietcomfort",
+            "freebuds",
+            "bean",
+            "auricular",
+            "auriculares",
+            "audifono",
+            "audifonos",
+        )
+        val speakerHints = listOf(
+            "speaker",
+            "soundlink",
+            "boombox",
+            "flip",
+            "charge",
+            "xtreme",
+            "soundcore",
+            "home",
+            "nest",
+            "roam",
+            "move",
+            "parlante",
+            "bocina",
+            "altavoz",
+        )
+
+        if (speakerHints.any { normalizedName.contains(it) }) return false
+        return headphoneHints.any { normalizedName.contains(it) }
     }
 
     private fun isCastingMediaPlayback(): Boolean {

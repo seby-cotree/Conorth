@@ -18,5 +18,6 @@ data class WearAudioOutputRoute(
             connectionState == MediaRouter.RouteInfo.CONNECTION_STATE_CONNECTED
 
     val isBluetooth: Boolean
-        get() = routeType == WearVolumeState.ROUTE_TYPE_BLUETOOTH
+        get() = routeType == WearVolumeState.ROUTE_TYPE_BLUETOOTH ||
+            routeType == WearVolumeState.ROUTE_TYPE_HEADPHONES
 }
