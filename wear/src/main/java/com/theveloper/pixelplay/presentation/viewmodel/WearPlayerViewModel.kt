@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.theveloper.pixelplay.data.WearAudioOutputRoute
+import com.theveloper.pixelplay.data.WearFavoriteSyncRepository
 import com.theveloper.pixelplay.data.WearLocalQueueState
 import com.theveloper.pixelplay.data.WearLocalPlayerRepository
 import com.theveloper.pixelplay.data.WearOutputTarget
@@ -20,7 +21,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.delay
@@ -44,6 +47,7 @@ class WearPlayerViewModel @Inject constructor(
     private val localPlayerRepository: WearLocalPlayerRepository,
     private val transferRepository: WearTransferRepository,
     private val volumeRepository: WearVolumeRepository,
+    private val favoriteSyncRepository: WearFavoriteSyncRepository,
 ) : ViewModel() {
     companion object {
         private const val PHONE_SYNC_BOOTSTRAP_ATTEMPTS = 3
@@ -86,6 +90,7 @@ class WearPlayerViewModel @Inject constructor(
                     isPlaying = localState.isPlaying,
                     currentPositionMs = localState.currentPositionMs,
                     totalDurationMs = localState.totalDurationMs,
+                    isFavorite = localState.isFavorite,
                     isShuffleEnabled = localState.isShuffleEnabled,
                     repeatMode = localState.repeatMode,
                 )
@@ -173,6 +178,18 @@ class WearPlayerViewModel @Inject constructor(
         localActive || (player.songId.isNotBlank() && songs.any { it.songId == player.songId })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val canCurrentSongBeFavorited: StateFlow<Boolean> = combine(
+        outputTarget,
+        isPhoneConnected,
+        stateRepository.playerState,
+        localPlayerRepository.localPlayerState,
+    ) { target, phoneConnected, remoteState, localState ->
+        when (target) {
+            WearOutputTarget.WATCH -> localState.songId.isNotBlank() && localState.canToggleFavorite
+            WearOutputTarget.PHONE -> phoneConnected && remoteState.songId.isNotBlank()
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     init {
         viewModelScope.launch {
             outputTarget.collect {
@@ -188,6 +205,30 @@ class WearPlayerViewModel @Inject constructor(
                 }
                 delay(PHONE_ROUTE_REFRESH_INTERVAL_MS)
             }
+        }
+        viewModelScope.launch {
+            combine(
+                outputTarget,
+                isPhoneConnected,
+                localPlayerRepository.localPlayerState,
+            ) { target, phoneConnected, localState ->
+                if (
+                    target == WearOutputTarget.WATCH &&
+                    phoneConnected &&
+                    localState.canToggleFavorite &&
+                    localState.songId.isNotBlank()
+                ) {
+                    localState.songId
+                } else {
+                    null
+                }
+            }
+                .distinctUntilChanged()
+                .collect { songId ->
+                    if (songId != null) {
+                        favoriteSyncRepository.requestFavoriteSync(songIds = listOf(songId))
+                    }
+                }
         }
         bootstrapPhoneStateSync()
     }
@@ -290,9 +331,30 @@ class WearPlayerViewModel @Inject constructor(
     }
 
     fun toggleFavorite() {
-        if (isWatchOutputSelected.value) return // Not supported for local playback
+        if (isWatchOutputSelected.value) {
+            val current = localPlayerRepository.localPlayerState.value
+            if (!current.canToggleFavorite || current.songId.isBlank()) return
+            favoriteSyncRepository.setFavorite(
+                songId = current.songId,
+                isFavorite = !current.isFavorite,
+            )
+            return
+        }
+
         val current = stateRepository.playerState.value
-        playbackController.toggleFavorite(targetEnabled = !current.isFavorite)
+        if (!isPhoneConnected.value || current.songId.isBlank()) return
+        stateRepository.updatePlayerState(current.copy(isFavorite = !current.isFavorite))
+        playbackController.toggleFavorite(
+            songId = current.songId,
+            targetEnabled = !current.isFavorite,
+        )
+    }
+
+    fun refreshCurrentSongFavoriteState() {
+        if (!isWatchOutputSelected.value || !isPhoneConnected.value) return
+        val current = localPlayerRepository.localPlayerState.value
+        if (!current.canToggleFavorite || current.songId.isBlank()) return
+        favoriteSyncRepository.requestFavoriteSync(songIds = listOf(current.songId))
     }
 
     fun toggleShuffle() {

@@ -75,6 +75,7 @@ fun MoreScreen(
     val playerState by playerViewModel.playerState.collectAsState()
     val isPhoneConnected by playerViewModel.isPhoneConnected.collectAsState()
     val isWatchOutputSelected by playerViewModel.isWatchOutputSelected.collectAsState()
+    val canCurrentSongBeFavorited by playerViewModel.canCurrentSongBeFavorited.collectAsState()
     val queueState by browseViewModel.uiState.collectAsState()
     val downloadedSongIds by downloadsViewModel.downloadedSongIds.collectAsState()
     val activeTransfers by downloadsViewModel.activeTransfers.collectAsState()
@@ -84,11 +85,24 @@ fun MoreScreen(
             browseViewModel.loadItems(WearBrowseRequest.QUEUE)
         }
     }
+    LaunchedEffect(
+        isWatchOutputSelected,
+        isPhoneConnected,
+        canCurrentSongBeFavorited,
+        playerState.songId,
+    ) {
+        if (isWatchOutputSelected && isPhoneConnected && canCurrentSongBeFavorited) {
+            playerViewModel.refreshCurrentSongFavoriteState()
+        }
+    }
 
     val queueItems = (queueState as? BrowseUiState.Success)?.items.orEmpty()
     val upNextTitle = queueItems.drop(1).firstOrNull()?.title ?: "Nothing queued"
     val currentSongId = playerState.songId
-    val favoriteActionEnabled = isPhoneConnected && !isWatchOutputSelected && !playerState.isEmpty
+    val favoriteActionEnabled = !playerState.isEmpty && when {
+        isWatchOutputSelected -> canCurrentSongBeFavorited
+        else -> isPhoneConnected && canCurrentSongBeFavorited
+    }
     val playbackModeActionsEnabled = !playerState.isEmpty && (
         isWatchOutputSelected || isPhoneConnected
     )

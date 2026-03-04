@@ -25,6 +25,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,6 +46,8 @@ data class WearLocalPlayerState(
     val isPlaying: Boolean = false,
     val currentPositionMs: Long = 0L,
     val totalDurationMs: Long = 0L,
+    val isFavorite: Boolean = false,
+    val canToggleFavorite: Boolean = false,
     val isShuffleEnabled: Boolean = false,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
 ) {
@@ -105,6 +108,25 @@ class WearLocalPlayerRepository @Inject constructor(
         private const val TAG = "WearLocalPlayer"
         private const val POSITION_UPDATE_INTERVAL_MS = 1000L
         private const val MEDIA_SESSION_ID = "wear-local-playback"
+    }
+
+    init {
+        scope.launch {
+            localSongDao.getAllSongs().collect { songs ->
+                if (songs.isNotEmpty()) {
+                    val latestSongsById = songs.associateBy { it.songId }
+                    if (currentQueueSongsById.isNotEmpty()) {
+                        currentQueueSongsById = currentQueueSongsById.mapValues { (songId, song) ->
+                            latestSongsById[songId] ?: song
+                        }
+                    }
+                }
+
+                if (!localPlayerState.value.isEmpty) {
+                    updateState()
+                }
+            }
+        }
     }
 
     private fun getOrCreatePlayer(): ExoPlayer {
@@ -204,7 +226,12 @@ class WearLocalPlayerRepository @Inject constructor(
         withContext(Dispatchers.Main) {
             val player = getOrCreatePlayer()
             currentQueueSongIds = queueSongs.map { it.songId }
-            currentQueueSongsById = queueSongIdToLocal
+            val latestSongsById = queueSongIdToLocal.keys.mapNotNull { songId ->
+                localSongDao.getSongById(songId)
+            }.associateBy { it.songId }
+            currentQueueSongsById = queueSongIdToLocal.mapValues { (songId, song) ->
+                latestSongsById[songId] ?: song
+            }
             currentQueueItemsById = queueSongs.associateBy { it.songId }
             lastPaletteSongId = ""
             lastArtworkSongId = ""
@@ -363,6 +390,7 @@ class WearLocalPlayerRepository @Inject constructor(
     private fun updateState() {
         val player = exoPlayer ?: return
         val currentItem = player.currentMediaItem
+        val currentLocalSong = currentItem?.mediaId?.let(currentQueueSongsById::get)
         _localPlayerState.value = WearLocalPlayerState(
             songId = currentItem?.mediaId ?: "",
             songTitle = currentItem?.mediaMetadata?.title?.toString() ?: "",
@@ -371,6 +399,8 @@ class WearLocalPlayerRepository @Inject constructor(
             isPlaying = player.isPlaying,
             currentPositionMs = player.currentPosition,
             totalDurationMs = player.duration.coerceAtLeast(0L),
+            isFavorite = currentLocalSong?.isFavorite == true,
+            canToggleFavorite = currentLocalSong != null,
             isShuffleEnabled = player.shuffleModeEnabled,
             repeatMode = player.repeatMode,
         )

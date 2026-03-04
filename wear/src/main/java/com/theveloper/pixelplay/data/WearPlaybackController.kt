@@ -56,9 +56,15 @@ class WearPlaybackController @Inject constructor(
     fun togglePlayPause() = sendCommand(WearPlaybackCommand(WearPlaybackCommand.TOGGLE_PLAY_PAUSE))
     fun next() = sendCommand(WearPlaybackCommand(WearPlaybackCommand.NEXT))
     fun previous() = sendCommand(WearPlaybackCommand(WearPlaybackCommand.PREVIOUS))
-    fun toggleFavorite(targetEnabled: Boolean? = null) = sendCommand(
+    fun toggleFavorite(
+        songId: String? = null,
+        targetEnabled: Boolean? = null,
+        requestId: String? = null,
+    ) = sendCommand(
         WearPlaybackCommand(
             action = WearPlaybackCommand.TOGGLE_FAVORITE,
+            songId = songId,
+            requestId = requestId,
             targetEnabled = targetEnabled
         )
     )

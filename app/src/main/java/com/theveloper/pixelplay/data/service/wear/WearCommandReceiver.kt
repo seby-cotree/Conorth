@@ -43,6 +43,9 @@ import com.theveloper.pixelplay.presentation.viewmodel.ColorSchemeProcessor
 import com.theveloper.pixelplay.shared.WearBrowseRequest
 import com.theveloper.pixelplay.shared.WearBrowseResponse
 import com.theveloper.pixelplay.shared.WearDataPaths
+import com.theveloper.pixelplay.shared.WearFavoriteStateEntry
+import com.theveloper.pixelplay.shared.WearFavoriteSyncRequest
+import com.theveloper.pixelplay.shared.WearFavoriteSyncResponse
 import com.theveloper.pixelplay.shared.WearLibraryItem
 import com.theveloper.pixelplay.shared.WearLibraryState
 import com.theveloper.pixelplay.shared.WearPlaybackCommand
@@ -137,6 +140,7 @@ class WearCommandReceiver : WearableListenerService() {
             WearDataPaths.TRANSFER_PROGRESS -> handleWatchTransferProgress(messageEvent)
             WearDataPaths.TRANSFER_CANCEL -> handleTransferCancel(messageEvent)
             WearDataPaths.WATCH_LIBRARY_STATE -> handleWatchLibraryState(messageEvent)
+            WearDataPaths.FAVORITES_SYNC_REQUEST -> handleFavoriteSyncRequest(messageEvent)
             else -> Timber.tag(TAG).w("Unknown message path: ${messageEvent.path}")
         }
     }
@@ -192,6 +196,14 @@ class WearCommandReceiver : WearableListenerService() {
         }
 
         Timber.tag(TAG).d("Playback command: ${command.action}")
+
+        if (
+            command.action == WearPlaybackCommand.TOGGLE_FAVORITE &&
+            !command.songId.isNullOrBlank()
+        ) {
+            handleSongFavoriteCommand(command, messageEvent.sourceNodeId)
+            return
+        }
 
         when (command.action) {
             WearPlaybackCommand.PLAY_ITEM -> {
@@ -273,6 +285,47 @@ class WearCommandReceiver : WearableListenerService() {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    private fun handleSongFavoriteCommand(command: WearPlaybackCommand, targetNodeId: String) {
+        val songId = command.songId
+        if (songId.isNullOrBlank()) {
+            scope.launch {
+                sendPlaybackResult(
+                    nodeId = targetNodeId,
+                    requestId = command.requestId,
+                    action = command.action,
+                    songId = null,
+                    success = false,
+                    error = "Missing song id",
+                )
+            }
+            return
+        }
+
+        scope.launch {
+            runCatching {
+                val targetFavoriteState = command.targetEnabled
+                    ?: !musicRepository.getFavoriteSongIdsOnce().contains(songId)
+                musicRepository.setFavoriteStatus(songId, targetFavoriteState)
+                sendPlaybackResult(
+                    nodeId = targetNodeId,
+                    requestId = command.requestId,
+                    action = command.action,
+                    songId = songId,
+                    success = true,
+                )
+            }.onFailure { error ->
+                sendPlaybackResult(
+                    nodeId = targetNodeId,
+                    requestId = command.requestId,
+                    action = command.action,
+                    songId = songId,
+                    success = false,
+                    error = error.message ?: "Failed to update favorite",
+                )
             }
         }
     }
@@ -813,6 +866,37 @@ class WearCommandReceiver : WearableListenerService() {
         }
     }
 
+    private fun handleFavoriteSyncRequest(messageEvent: MessageEvent) {
+        scope.launch {
+            runCatching {
+                val request = json.decodeFromString<WearFavoriteSyncRequest>(
+                    String(messageEvent.data, Charsets.UTF_8)
+                )
+                val favoriteIds = musicRepository.getFavoriteSongIdsOnce()
+                val response = WearFavoriteSyncResponse(
+                    states = request.songIds
+                        .filter { it.isNotBlank() }
+                        .distinct()
+                        .map { songId ->
+                            WearFavoriteStateEntry(
+                                songId = songId,
+                                isFavorite = favoriteIds.contains(songId),
+                            )
+                        }
+                )
+                Wearable.getMessageClient(this@WearCommandReceiver)
+                    .sendMessage(
+                        messageEvent.sourceNodeId,
+                        WearDataPaths.FAVORITES_SYNC_STATE,
+                        json.encodeToString(response).toByteArray(Charsets.UTF_8),
+                    )
+                    .await()
+            }.onFailure { error ->
+                Timber.tag(TAG).e(error, "Failed to handle favorite sync request")
+            }
+        }
+    }
+
     /**
      * Get browse items based on the browse type, following the same pattern
      * as AutoMediaBrowseTree.
@@ -1321,6 +1405,7 @@ class WearCommandReceiver : WearableListenerService() {
                 fileSize = fileSize,
                 bitrate = song.bitrate ?: 0,
                 sampleRate = song.sampleRate ?: 0,
+                isFavorite = song.isFavorite,
                 paletteSeedArgb = paletteSeedArgb,
                 themePalette = transferThemePalette,
             )
@@ -1855,6 +1940,7 @@ class WearCommandReceiver : WearableListenerService() {
             fileSize = 0L,
             bitrate = 0,
             sampleRate = 0,
+            isFavorite = false,
             error = errorMessage,
         )
         try {
