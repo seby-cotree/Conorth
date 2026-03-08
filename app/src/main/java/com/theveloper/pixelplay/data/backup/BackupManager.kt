@@ -102,8 +102,12 @@ class BackupManager @Inject constructor(
         runCatching {
             // Validate file first
             val fileValidation = validationPipeline.validateFile(uri)
+            val warnings = mutableListOf<String>()
             if (fileValidation is BackupValidationResult.Invalid && fileValidation.fatalErrors.isNotEmpty()) {
                 throw IllegalArgumentException(fileValidation.fatalErrors.first().message)
+            }
+            if (fileValidation is BackupValidationResult.Invalid) {
+                warnings.addAll(fileValidation.warnings.map { it.message })
             }
 
             // Build restore plan
@@ -111,12 +115,38 @@ class BackupManager @Inject constructor(
 
             // Validate manifest
             val manifestValidation = validationPipeline.validateManifest(plan.manifest)
-            val warnings = plan.warnings.toMutableList()
+            warnings.addAll(plan.warnings)
             if (manifestValidation is BackupValidationResult.Invalid) {
                 if (manifestValidation.fatalErrors.isNotEmpty()) {
                     throw IllegalArgumentException(manifestValidation.fatalErrors.first().message)
                 }
                 warnings.addAll(manifestValidation.warnings.map { it.message })
+            }
+
+            val modulePayloads = backupReader.readAllModulePayloads(uri).getOrThrow()
+            plan.availableModules.toList().sortedBy { it.key }.forEach { section ->
+                val payload = modulePayloads[section.key]
+                    ?: throw IllegalArgumentException(
+                        "Backup is missing the payload for ${section.label}."
+                    )
+
+                val moduleValidation = validationPipeline.validateModulePayload(
+                    section = section,
+                    payload = payload,
+                    manifest = plan.manifest
+                )
+                if (moduleValidation is BackupValidationResult.Invalid) {
+                    if (moduleValidation.fatalErrors.isNotEmpty()) {
+                        throw IllegalArgumentException(
+                            "${section.label}: ${moduleValidation.fatalErrors.first().message}"
+                        )
+                    }
+                    warnings.addAll(
+                        moduleValidation.warnings.map { warning ->
+                            "${section.label}: ${warning.message}"
+                        }
+                    )
+                }
             }
 
             plan.copy(warnings = warnings)

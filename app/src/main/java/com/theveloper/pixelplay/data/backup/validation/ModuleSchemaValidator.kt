@@ -12,6 +12,11 @@ import javax.inject.Singleton
 class ModuleSchemaValidator @Inject constructor(
     private val contentSanitizer: ContentSanitizer
 ) {
+    private data class NumericFieldResult(
+        val present: Boolean,
+        val value: Long?
+    )
+
     companion object {
         const val MAX_STRING_LENGTH = 50_000
         const val MAX_ENTRIES_PER_MODULE = 100_000
@@ -200,12 +205,117 @@ class ModuleSchemaValidator @Inject constructor(
     }
 
     private fun validateEngagementStats(array: com.google.gson.JsonArray, errors: MutableList<ValidationError>) {
+        val seenSongIds = mutableSetOf<String>()
         array.forEachIndexed { i, element ->
-            if (!element.isJsonObject) return@forEachIndexed
+            if (!element.isJsonObject) {
+                errors.add(
+                    ValidationError(
+                        "INVALID_ENGAGEMENT_ENTRY",
+                        "EngagementStats[$i]: entry is not a JSON object",
+                        module = "engagement_stats",
+                        severity = Severity.WARNING
+                    )
+                )
+                return@forEachIndexed
+            }
             val obj = element.asJsonObject
-            val playCount = obj.get("play_count")?.asInt ?: obj.get("playCount")?.asInt ?: 0
-            if (playCount < 0) {
-                errors.add(ValidationError("NEGATIVE_PLAY_COUNT", "EngagementStats[$i]: negative play count", module = "engagement_stats", severity = Severity.WARNING))
+            val songId = readStringField(obj, "songId", "song_id")?.trim()
+            if (songId.isNullOrEmpty()) {
+                errors.add(
+                    ValidationError(
+                        "MISSING_SONG_ID",
+                        "EngagementStats[$i]: missing songId",
+                        module = "engagement_stats",
+                        severity = Severity.WARNING
+                    )
+                )
+            } else if (!seenSongIds.add(songId)) {
+                errors.add(
+                    ValidationError(
+                        "DUPLICATE_SONG_ID",
+                        "EngagementStats[$i]: duplicate songId '$songId'",
+                        module = "engagement_stats",
+                        severity = Severity.WARNING
+                    )
+                )
+            }
+
+            val playCount = readNumericField(obj, "play_count", "playCount", "score", "plays")
+            if (playCount.present && playCount.value == null) {
+                errors.add(
+                    ValidationError(
+                        "INVALID_PLAY_COUNT",
+                        "EngagementStats[$i]: play count is not numeric",
+                        module = "engagement_stats",
+                        severity = Severity.WARNING
+                    )
+                )
+            } else if ((playCount.value ?: 0L) < 0L) {
+                errors.add(
+                    ValidationError(
+                        "NEGATIVE_PLAY_COUNT",
+                        "EngagementStats[$i]: negative play count",
+                        module = "engagement_stats",
+                        severity = Severity.WARNING
+                    )
+                )
+            }
+
+            val totalDuration = readNumericField(
+                obj,
+                "total_play_duration_ms",
+                "totalPlayDurationMs",
+                "totalDuration",
+                "total_duration",
+                "durationMs",
+                "duration_ms"
+            )
+            if (totalDuration.present && totalDuration.value == null) {
+                errors.add(
+                    ValidationError(
+                        "INVALID_TOTAL_DURATION",
+                        "EngagementStats[$i]: total duration is not numeric",
+                        module = "engagement_stats",
+                        severity = Severity.WARNING
+                    )
+                )
+            } else if ((totalDuration.value ?: 0L) < 0L) {
+                errors.add(
+                    ValidationError(
+                        "NEGATIVE_TOTAL_DURATION",
+                        "EngagementStats[$i]: negative total duration",
+                        module = "engagement_stats",
+                        severity = Severity.WARNING
+                    )
+                )
+            }
+
+            val lastPlayed = readNumericField(
+                obj,
+                "last_played_timestamp",
+                "lastPlayedTimestamp",
+                "lastPlayedAt",
+                "last_played_at",
+                "timestamp"
+            )
+            if (lastPlayed.present && lastPlayed.value == null) {
+                errors.add(
+                    ValidationError(
+                        "INVALID_LAST_PLAYED_TIMESTAMP",
+                        "EngagementStats[$i]: last played timestamp is not numeric",
+                        module = "engagement_stats",
+                        severity = Severity.WARNING
+                    )
+                )
+            } else if ((lastPlayed.value ?: 0L) < 0L) {
+                errors.add(
+                    ValidationError(
+                        "NEGATIVE_LAST_PLAYED_TIMESTAMP",
+                        "EngagementStats[$i]: negative last played timestamp",
+                        module = "engagement_stats",
+                        severity = Severity.WARNING
+                    )
+                )
             }
         }
     }
@@ -265,4 +375,28 @@ class ModuleSchemaValidator @Inject constructor(
         }
     }
 
+    private fun readStringField(obj: com.google.gson.JsonObject, vararg keys: String): String? {
+        return keys.asSequence()
+            .mapNotNull { key ->
+                obj.get(key)
+                    ?.takeIf { it.isJsonPrimitive }
+                    ?.asString
+            }
+            .firstOrNull()
+    }
+
+    private fun readNumericField(obj: com.google.gson.JsonObject, vararg keys: String): NumericFieldResult {
+        keys.forEach { key ->
+            val primitive = obj.get(key)
+                ?.takeIf { it.isJsonPrimitive }
+                ?.asJsonPrimitive
+                ?: return@forEach
+            return when {
+                primitive.isNumber -> NumericFieldResult(present = true, value = primitive.asNumber.toLong())
+                primitive.isString -> NumericFieldResult(present = true, value = primitive.asString.toLongOrNull())
+                else -> NumericFieldResult(present = true, value = null)
+            }
+        }
+        return NumericFieldResult(present = false, value = null)
+    }
 }

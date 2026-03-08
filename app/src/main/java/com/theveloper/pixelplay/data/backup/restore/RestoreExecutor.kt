@@ -62,8 +62,9 @@ class RestoreExecutor @Inject constructor(
             selectedModules.forEach { section ->
                 val payload = allPayloads[section.key]
                 if (payload == null) {
-                    Log.w(TAG, "Module ${section.key} not found in backup, skipping")
-                    return@forEach
+                    throw IllegalStateException(
+                        "Backup is missing the payload for ${section.label}."
+                    )
                 }
 
                 // Validate each module payload
@@ -90,7 +91,7 @@ class RestoreExecutor @Inject constructor(
         }
 
         // ---- PHASE 3: RESTORE ----
-        val restoredModules = mutableSetOf<BackupSection>()
+        val restoredModules = mutableListOf<BackupSection>()
         var currentSection: BackupSection? = null
         try {
             modulePayloads.forEach { (section, payload) ->
@@ -109,9 +110,10 @@ class RestoreExecutor @Inject constructor(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Restore failed at module, rolling back", e)
-            // ROLLBACK all already-restored modules
+            // Roll back in reverse restore order, including the module that failed mid-restore.
             var rollbackSuccess = true
-            restoredModules.forEach { section ->
+            val rollbackOrder = (restoredModules + listOfNotNull(currentSection)).distinct().asReversed()
+            rollbackOrder.forEach { section ->
                 try {
                     val snapshot = snapshots[section]
                     if (snapshot != null) {
