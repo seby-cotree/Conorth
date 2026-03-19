@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1f1f1f">
+    <title>Conorth - Privacy-First Music Player</title>
+    
+    <!-- Material Icons -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/themes.css">
+    <link rel="stylesheet" href="css/player.css">
+    <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+    <div id="app" class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1 class="app-title">🎵 Conorth</h1>
+                <div class="header-controls">
+                    <button id="search-btn" class="icon-btn" title="Ricerca">
+                        <span class="material-icons">search</span>
+                    </button>
+                    <button id="theme-btn" class="icon-btn" title="Tema">
+                        <span class="material-icons">brightness_4</span>
+                    </button>
+                    <button id="menu-btn" class="icon-btn" title="Menu">
+                        <span class="material-icons">more_vert</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Navigation Tabs -->
+            <nav class="nav-tabs">
+                <button class="tab-btn active" data-tab="player">
+                    <span class="material-icons">music_note</span>
+                    <span>Player</span>
+                </button>
+                <button class="tab-btn" data-tab="library">
+                    <span class="material-icons">library_music</span>
+                    <span>Libreria</span>
+                </button>
+                <button class="tab-btn" data-tab="playlists">
+                    <span class="material-icons">queue_music</span>
+                    <span>Playlist</span>
+                </button>
+                <button class="tab-btn" data-tab="equalizer">
+                    <span class="material-icons">graphic_eq</span>
+                    <span>Equalizer</span>
+                </button>
+            </nav>
+
+            <!-- Tab Content -->
+            <div class="tabs-content">
+                <!-- Player Tab -->
+                <section id="player-tab" class="tab-content active">
+                    <div class="player-container">
+                        <!-- Album Art -->
+                        <div class="album-art-container">
+                            <img id="album-art" class="album-art" 
+                                 src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect fill='%23333' width='200' height='200'/%3E%3Ctext x='50%25' y='50%25' font-size='60' fill='%23fff' text-anchor='middle' dominant-baseline='middle'%3E♪%3C/text%3E%3C/svg%3E" 
+                                 alt="Album Art">
+                        </div>
+
+                        <!-- Song Info -->
+                        <div class="song-info">
+                            <h2 id="song-title" class="song-title">Nessuna canzone</h2>
+                            <p id="song-artist" class="song-artist">Artista sconosciuto</p>
+                            <p id="song-album" class="song-album">Album sconosciuto</p>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div class="progress-container">
+                            <span id="current-time" class="time">0:00</span>
+                            <div class="progress-bar">
+                                <div id="progress" class="progress"></div>
+                            </div>
+                            <span id="duration" class="time">0:00</span>
+                        </div>
+
+                        <!-- Controls -->
+                        <div class="player-controls">
+                            <button id="shuffle-btn" class="control-btn" title="Shuffle">
+                                <span class="material-icons">shuffle</span>
+                            </button>
+                            <button id="prev-btn" class="control-btn" title="Precedente">
+                                <span class="material-icons">skip_previous</span>
+                            </button>
+                            <button id="play-btn" class="control-btn play-btn" title="Riproduci">
+                                <span class="material-icons">play_arrow</span>
+                            </button>
+                            <button id="next-btn" class="control-btn" title="Successivo">
+                                <span class="material-icons">skip_next</span>
+                            </button>
+                            <button id="repeat-btn" class="control-btn" title="Ripeti">
+                                <span class="material-icons">repeat</span>
+                            </button>
+                        </div>
+
+                        <!-- Volume Control -->
+                        <div class="volume-container">
+                            <span class="material-icons">volume_up</span>
+                            <input type="range" id="volume-slider" class="volume-slider" min="0" max="100" value="70">
+                            <span id="volume-value" class="volume-value">70%</span>
+                        </div>
+
+                        <!-- Lyrics -->
+                        <div class="lyrics-container">
+                            <h3>Testo</h3>
+                            <div id="lyrics-display" class="lyrics-display">
+                                <p class="lyrics-placeholder">Nessun testo disponibile</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Library Tab -->
+                <section id="library-tab" class="tab-content">
+                    <div class="library-container">
+                        <div class="filter-buttons">
+                            <button class="filter-btn active" data-filter="songs">
+                                <span class="material-icons">music_note</span>
+                                Canzoni
+                            </button>
+                            <button class="filter-btn" data-filter="albums">
+                                <span class="material-icons">album</span>
+                                Album
+                            </button>
+                            <button class="filter-btn" data-filter="artists">
+                                <span class="material-icons">person</span>
+                                Artisti
+                            </button>
+                            <button class="filter-btn" data-filter="genres">
+                                <span class="material-icons">category</span>
+                                Generi
+                            </button>
+                        </div>
+
+                        <!-- Songs List -->
+                        <div id="songs-list" class="library-list active-filter">
+                            <div class="empty-state">
+                                <span class="material-icons">music_note</span>
+                                <p>Nessuna canzone trovata</p>
+                                <p class="hint">Carica file audio per iniziare</p>
+                            </div>
+                        </div>
+
+                        <!-- Albums Grid -->
+                        <div id="albums-list" class="library-grid">
+                            <div class="empty-state">
+                                <span class="material-icons">album</span>
+                                <p>Nessun album trovato</p>
+                            </div>
+                        </div>
+
+                        <!-- Artists List -->
+                        <div id="artists-list" class="library-list">
+                            <div class="empty-state">
+                                <span class="material-icons">person</span>
+                                <p>Nessun artista trovato</p>
+                            </div>
+                        </div>
+
+                        <!-- Genres List -->
+                        <div id="genres-list" class="library-list">
+                            <div class="empty-state">
+                                <span class="material-icons">category</span>
+                                <p>Nessun genere trovato</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Playlists Tab -->
+                <section id="playlists-tab" class="tab-content">
+                    <div class="playlists-container">
+                        <button id="create-playlist-btn" class="create-btn">
+                            <span class="material-icons">add</span>
+                            Nuova Playlist
+                        </button>
+                        <div id="playlists-list" class="playlists-list">
+                            <div class="empty-state">
+                                <span class="material-icons">queue_music</span>
+                                <p>Nessuna playlist</p>
+                                <p class="hint">Crea una nuova playlist per organizzare le tue canzoni</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Equalizer Tab -->
+                <section id="equalizer-tab" class="tab-content">
+                    <div class="equalizer-container">
+                        <!-- Presets -->
+                        <div class="eq-presets">
+                            <button class="preset-btn active" data-preset="off">
+                                <span>Off</span>
+                            </button>
+                            <button class="preset-btn" data-preset="normal">
+                                <span>Normal</span>
+                            </button>
+                            <button class="preset-btn" data-preset="bass">
+                                <span>Bass</span>
+                            </button>
+                            <button class="preset-btn" data-preset="treble">
+                                <span>Treble</span>
+                            </button>
+                            <button class="preset-btn" data-preset="classic">
+                                <span>Classic</span>
+                            </button>
+                        </div>
+
+                        <!-- Sliders -->
+                        <div class="eq-sliders">
+                            <div class="eq-band">
+                                <label>60Hz</label>
+                                <input type="range" class="eq-slider" data-freq="60" min="-12" max="12" value="0">
+                                <span class="eq-value">0</span>
+                            </div>
+                            <div class="eq-band">
+                                <label>250Hz</label>
+                                <input type="range" class="eq-slider" data-freq="250" min="-12" max="12" value="0">
+                                <span class="eq-value">0</span>
+                            </div>
+                            <div class="eq-band">
+                                <label>1kHz</label>
+                                <input type="range" class="eq-slider" data-freq="1000" min="-12" max="12" value="0">
+                                <span class="eq-value">0</span>
+                            </div>
+                            <div class="eq-band">
+                                <label>4kHz</label>
+                                <input type="range" class="eq-slider" data-freq="4000" min="-12" max="12" value="0">
+                                <span class="eq-value">0</span>
+                            </div>
+                            <div class="eq-band">
+                                <label>16kHz</label>
+                                <input type="range" class="eq-slider" data-freq="16000" min="-12" max="12" value="0">
+                                <span class="eq-value">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- Player Bar (Bottom) -->
+        <div class="player-bar">
+            <audio id="audio-player"></audio>
+            <div class="bar-info">
+                <img id="bar-album-art" class="bar-album-art" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 50'%3E%3Crect fill='%23333' width='50' height='50'/%3E%3C/svg%3E" alt="">
+                <div class="bar-text">
+                    <p id="bar-title" class="bar-title">Conorth</p>
+                    <p id="bar-artist" class="bar-artist">Music Player</p>
+                </div>
+            </div>
+            <div class="bar-controls">
+                <button id="bar-play-btn" class="bar-btn">
+                    <span class="material-icons">play_arrow</span>
+                </button>
+                <button id="bar-next-btn" class="bar-btn">
+                    <span class="material-icons">skip_next</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Upload Modal -->
+        <div id="upload-modal" class="modal">
+            <div class="modal-content">
+                <h2>Carica File Audio</h2>
+                <div class="file-upload-area" id="file-upload-area">
+                    <span class="material-icons">cloud_upload</span>
+                    <p>Trascina file audio qui o clicca per selezionare</p>
+                    <input type="file" id="file-input" multiple accept="audio/*" hidden>
+                </div>
+                <div id="upload-progress" class="upload-progress"></div>
+                <button id="close-modal-btn" class="modal-btn">Chiudi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/storage.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/playlist.js"></script>
+    <script src="js/lyrics.js"></script>
+    <script src="js/equalizer.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
