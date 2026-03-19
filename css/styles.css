@@ -1,0 +1,16 @@
+.my-global-style {
+  font-family: 'Roboto', sans-serif;
+  color: #121212;
+  background-color: #ffffff;
+  /* Material Design 3 colors */
+  primary-color: #6200ee;
+  on-primary-color: #ffffff;
+  secondary-color: #03dac6;
+  on-secondary-color: #000000;
+}
+
+/* Additional global styles */
+body {
+  margin: 0;
+  padding: 0;
+}
