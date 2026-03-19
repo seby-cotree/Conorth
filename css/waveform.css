@@ -1,0 +1,23 @@
+/* Waveform styles */
+
+.waveform {
+    width: 100%;
+    height: 100px;
+    background: #ccf;
+    border-radius: 5px;
+}
+
+.waveform .bar {
+    display: inline-block;
+    background: #66f;
+    height: 100%;
+    border-radius: 2px;
+    margin: 0 1px;
+    animation: wave-animation 1s infinite;
+}
+
+@keyframes wave-animation {
+    0% { transform: scaleY(1); }
+    50% { transform: scaleY(1.5); }
+    100% { transform: scaleY(1); }
+}
